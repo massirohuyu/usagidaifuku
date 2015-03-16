@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Usagi Daifuku</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="http://cdn.rawgit.com/phi-jp/tmlib.js/0.4.4/build/tmlib.js" type="text/javascript"></script>
+  </head>
+  <body>
+    
+    <canvas id="world" width="640" height="480"></canvas>
+    
+    <script type="text/javascript">
+      //確認用
+      var test_app;
+      
+      (function(){
+        
+        var SCREEN_WIDTH    = 480, //12マス
+            SCREEN_HEIGHT   = 640, //16マス
+            SCREEN_CENTER_X = SCREEN_WIDTH/2,
+            SCREEN_CENTER_Y = SCREEN_HEIGHT/2,
+            BLOCK_WIDTH = 40,
+            BLOCK_HEIGHT = 40;
+
+        /*
+        * メイン処理(ページ読み込み後に実行される)
+        */
+        tm.main(function() {
+            // アプリケーション作成
+            var app = tm.app.CanvasApp("#world");
+            app.resize(SCREEN_WIDTH, SCREEN_HEIGHT); // リサイズ
+            app.fitWindow();    // 自動フィット
+
+            // シーンを切り替える
+            app.replaceScene(MainScene());
+
+            // 実行
+            app.run();
+        });
+        
+        tm.define("MainScene", {
+            superClass: "tm.app.Scene",
+
+            init: function() {
+                // 親の初期化
+                this.superInit();
+                
+                this.block = tm.app.Label('test').addChildTo(this);
+                this.block.setPosition(SCREEN_CENTER_X ,SCREEN_CENTER_Y );
+                this.on('pointingend', function(){
+                  this.app.replaceScene(GameScene());
+                })
+                
+            },
+
+            update: function(app) {
+              
+            }
+        });
+        
+        tm.define("GameScene", {
+            superClass: "tm.app.Scene",
+
+            init: function() {
+                // 親の初期化
+                this.superInit();
+
+                // スプライト
+                this.ctrlBlocks = this.createControlBlocks().addChildTo(this);
+                this.ctrlBlocks.setPosition(SCREEN_CENTER_X ,0 );
+                
+                this.on('pointingstart', function(){
+                  this.ctrlBlocks.rotation += 45;
+                })
+                
+            },
+
+            update: function(app) {
+                if( this.app.timer.frame%10 === 0 && this.ctrlBlocks.y < SCREEN_HEIGHT) {
+                  this.ctrlBlocks.y += BLOCK_HEIGHT;
+                }
+            },
+
+            createControlBlocks: function() {
+                var ctrlBlocks = tm.app.Shape(80,80);
+                ctrlBlocks.addChild(this.createBlock());
+                return ctrlBlocks;
+            },
+
+            createBlock: function() {
+                var block = tm.app.RoundRectangleShape(40, 40);
+                block.setFillStyle('#fff');
+                block.setInteractive(true);
+                return block;
+            }
+        });
+        
+      })();
+    </script>
+  </body>
+</html>
