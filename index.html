@@ -22,7 +22,12 @@
             SCREEN_CENTER_Y = SCREEN_HEIGHT/2,
             BLOCK_WIDTH = 40,
             BLOCK_HEIGHT = 40,
-            DIRECTION_LONG_TIME = 40;
+            BLOCKS_NUMBER = 2,
+            DIRECTION_LONG_TIME = 40,
+            GAME_GRID_WIDTH = 12,
+            GAME_GRID_HEIGHT = 10;
+            
+            
 
         /*
         * メイン処理(ページ読み込み後に実行される)
@@ -49,6 +54,7 @@
                 
                 this.block = tm.app.Label('test').addChildTo(this);
                 this.block.setPosition(SCREEN_CENTER_X ,SCREEN_CENTER_Y );
+                
                 this.on('pointingend', function(){
                   this.app.replaceScene(GameScene());
                 })
@@ -66,16 +72,15 @@
             init: function() {
                 // 親の初期化
                 this.superInit();
+                
+                //Gridの準備
+                this.gameGrid = this.createGrid();
+                this.ctrlBlocksGrid = this.createGrid();
 
-                // スプライト
-                this.ctrlBlocks = this.createControlBlocks().addChildTo(this);
-                this.ctrlBlocks.setPosition(SCREEN_CENTER_X ,0 );
+                //Blocksの準備
+                this.ctrlBlocksGrid.initBlocks(this);
                 
-                this.on('pointingstart', function(){
-                  this.ctrlBlocks.rotation += 45;
-                })
-                
-                //コントローラーの設置
+                //スマホ用コントローラーの設置
                 this.smpController = this.createSmpController().addChildTo(this);
                 this.smpController.setPosition( 120 ,SCREEN_HEIGHT - 120 );
                 
@@ -83,18 +88,27 @@
                 this.longPressedKey = false; //長押し中のキー
                 this.pressedTimes = 0;
                 
+                //グローバルイベント処理
+                this.on('pointingstart', function(){
+                  
+                })
             },
 
             update: function(app) {
                 
-                if( this.app.timer.frame%10 === 0 && this.ctrlBlocks.y < SCREEN_HEIGHT) {
-                  this.ctrlBlocks.y += BLOCK_HEIGHT;
+                if( this.app.timer.frame%10 === 0) {
+                  var moved = this.ctrlBlocksGrid.moveBlocks('down', this.gameGrid);
+                  if(!moved){
+                    this.gameGrid.add(this.ctrlBlocksGrid);
+                    this.ctrlBlocksGrid.initBlocks(this);
+                  };
                 }
                 
-                //キー操作判定
+                //キー操作判定（leftかrightか）
                 var direction = this.smpController.getDirection();
                 if(app.keyboard.getKey('left')) direction = 'left';
                 else if(app.keyboard.getKey('right')) direction = 'right';
+                else if(app.keyboard.getKey('up')) direction = 'up';
                 
                 if(direction && this.longPressedKey !== direction) {
                   this.longPressedKey = direction;
@@ -109,26 +123,156 @@
                   this.pressedTimes = 0;
                 }
                 
-                
-                if(direction === 'left'){
-                  console.log('left');
+                //キー判定による処理
+                if(direction === 'left' || direction === 'right'){
+                  this.ctrlBlocksGrid.moveBlocks(direction, this.gameGrid);
                 }
-                if(direction === 'right'){
-                  console.log('right');
+                if(direction === 'up'){
+                  console.log('up');
                 }
             },
 
             createControlBlocks: function() {
-                var ctrlBlocks = tm.app.Shape(80,80);
-                ctrlBlocks.addChild(this.createBlock());
-                return ctrlBlocks;
+              
             },
 
             createBlock: function() {
                 var block = tm.app.RoundRectangleShape(40, 40);
                 block.setFillStyle('#fff');
-                block.setInteractive(true);
                 return block;
+            },
+            
+            createGrid: function() {
+              var grid = [], _scene = this;
+              
+              grid.init = function(){
+                grid.clear();
+                grid.backGrid = grid.clear([]);
+                grid.originBlock;
+                return grid;
+              }
+              grid.clear = function(obj){
+                var gridObj = grid;
+                if(obj) gridObj = obj;
+                for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
+                    gridObj[i] = [];
+                  for(var j = 0; j < GAME_GRID_WIDTH; j++) {
+                    gridObj[i][j] = false;
+                  }
+                }
+                return gridObj;
+              }
+              grid.add = function(gridObj){
+                if(!gridObj) return grid;
+                for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
+                  for(var j = 0; j < GAME_GRID_WIDTH; j++) {
+                    if(gridObj[i][j]) {
+                      grid[i][j] = gridObj[i][j];
+                    }
+                  }
+                }
+                return grid;
+              }
+              grid.initBlocks = function(obj){
+                var center = Math.round(GAME_GRID_WIDTH/2);
+                grid.clear();
+                for(var i = 0; i < BLOCKS_NUMBER; i++){
+                  var block = _scene.createBlock();
+                  grid[i][center] = block;
+                  obj.addChild(block);
+                  block.gridPos = [i, center];
+                  block.setPosition(center*BLOCK_WIDTH, i*BLOCK_HEIGHT);
+                  if(i === 0) grid.originBlock = block;
+                }
+                return grid;
+              }
+              grid.rotateBlocks = function(rotateDirection, comparedGrid){
+                var rotateDirection = rotateDirection, rotateVal = 0,
+                  originY = grid.originBlock.gridPos[0], originX = grid.originBlock.gridPos[1];
+                if(rotateDirection) rotateDirection = 'right';
+                grid.clear(grid.backGrid);
+                
+                switch(rotateDirection){
+                  case 'left':
+                    rotateVal = 1;
+                    break;
+                  case 'right':
+                    rotateVal = -1;
+                    break;
+                }
+                
+                for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
+                  for(var j = 0; j < GAME_GRID_WIDTH; j++) {
+                    if(grid[i][j]) {
+                      var aftI = ((j-originX)*rotateVal)+originY,
+                        aftJ = ((i-originY)*rotateVal*(-1))+originX;
+                      if(typeof grid[aftI] === 'undefined' || typeof grid[aftI][aftJ] === 'undefined') return false;
+                      else if(comparedGrid && comparedGrid[aftI][aftJ] !== false) return false;
+                      grid.backGrid[aftI][aftJ] = grid[i][j];
+                    }
+                  }
+                }
+                
+                for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
+                  for(var j = 0; j < GAME_GRID_WIDTH; j++) {
+                      grid[i][j] = grid.backGrid[i][j];
+                      if(grid[i][j]) {
+                        //console.log(grid[i][j].tweener.move(j*BLOCK_WIDTH, i*BLOCK_HEIGHT));
+                        grid[i][j].gridPos = [i, j];
+                        grid[i][j].setPosition(j*BLOCK_WIDTH, i*BLOCK_HEIGHT);
+                      }
+                  }
+                }
+                
+                return grid;
+              }
+              grid.moveBlocks = function(direction, comparedGrid){
+                var dx = 0, dy = 0, comparedGrid = comparedGrid || false;
+                if(!direction) return false;
+                grid.clear(grid.backGrid);
+                
+                switch(direction){
+                  case 'up':
+                    dy = -1;
+                    break;
+                  case 'down':
+                    dy = 1;
+                    break;
+                  case 'left':
+                    dx = -1;
+                    break;
+                  case 'right':
+                    dx = 1;
+                    break;
+                }
+                
+                for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
+                  for(var j = 0; j < GAME_GRID_WIDTH; j++) {
+                    if(grid[i][j]) {
+                      var aftI = i+dy,
+                        aftJ = j+dx;
+                      if(typeof grid[aftI] === 'undefined' || typeof grid[aftI][aftJ] === 'undefined') return false;
+                      else if(comparedGrid && comparedGrid[aftI][aftJ] !== false) return false;
+                      grid.backGrid[aftI][aftJ] = grid[i][j];
+                    }
+                  }
+                }
+                
+                for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
+                  for(var j = 0; j < GAME_GRID_WIDTH; j++) {
+                      grid[i][j] = grid.backGrid[i][j];
+                      if(grid[i][j]) {
+                        //console.log(grid[i][j].tweener.move(j*BLOCK_WIDTH, i*BLOCK_HEIGHT));
+                        grid[i][j].gridPos = [i, j];
+                        grid[i][j].setPosition(j*BLOCK_WIDTH, i*BLOCK_HEIGHT);
+                      }
+                  }
+                }
+                
+                return grid;
+              }
+              
+              return grid.init();
             },
 
             createSmpController: function() {
