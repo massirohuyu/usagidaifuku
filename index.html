@@ -21,7 +21,8 @@
             SCREEN_CENTER_X = SCREEN_WIDTH/2,
             SCREEN_CENTER_Y = SCREEN_HEIGHT/2,
             BLOCK_WIDTH = 40,
-            BLOCK_HEIGHT = 40;
+            BLOCK_HEIGHT = 40,
+            DIRECTION_LONG_TIME = 40;
 
         /*
         * メイン処理(ページ読み込み後に実行される)
@@ -74,11 +75,46 @@
                   this.ctrlBlocks.rotation += 45;
                 })
                 
+                //コントローラーの設置
+                this.smpController = this.createSmpController().addChildTo(this);
+                this.smpController.setPosition( 120 ,SCREEN_HEIGHT - 120 );
+                
+                //押しキー判定用変数
+                this.longPressedKey = false; //長押し中のキー
+                this.pressedTimes = 0;
+                
             },
 
             update: function(app) {
+                
                 if( this.app.timer.frame%10 === 0 && this.ctrlBlocks.y < SCREEN_HEIGHT) {
                   this.ctrlBlocks.y += BLOCK_HEIGHT;
+                }
+                
+                //キー操作判定
+                var direction = this.smpController.getDirection();
+                if(app.keyboard.getKey('left')) direction = 'left';
+                else if(app.keyboard.getKey('right')) direction = 'right';
+                
+                if(direction && this.longPressedKey !== direction) {
+                  this.longPressedKey = direction;
+                  this.pressedTimes = 0;
+                } else if(direction && this.longPressedKey === direction) {
+                  if( this.pressedTimes < DIRECTION_LONG_TIME) {
+                    direction = false;
+                    this.pressedTimes ++;
+                  }
+                } else {
+                  this.longPressedKey = false;
+                  this.pressedTimes = 0;
+                }
+                
+                
+                if(direction === 'left'){
+                  console.log('left');
+                }
+                if(direction === 'right'){
+                  console.log('right');
                 }
             },
 
@@ -93,6 +129,53 @@
                 block.setFillStyle('#fff');
                 block.setInteractive(true);
                 return block;
+            },
+
+            createSmpController: function() {
+                var smpController = tm.app.Shape(110, 110),
+                  smpControllerBtn = tm.app.CircleShape(80, 80).setFillStyle('#888');
+          
+                smpController.addChild(tm.app.CircleShape(120, 120).setFillStyle('#fff'));
+                smpController.addChild(smpControllerBtn);
+                smpController.setInteractive(true);
+                smpController.dx = 0;
+                smpController.dy = 0;
+                console.log(smpControllerBtn);
+                smpController.on('pointingstart', function(e){
+                  this.px = e.pointing.x;
+                  this.py = e.pointing.y;
+                })
+                smpController.on('pointingmove', function(e){
+                  this.dx = e.pointing.x - this.px;
+                  this.dy = e.pointing.y - this.py;
+                  smpControllerBtn.x = this.dx;
+                  smpControllerBtn.y = this.dy;
+                })
+                smpController.on('pointingend', function(){
+                  this.dx = 0;
+                  this.dy = 0;
+                  smpControllerBtn.x = 0;
+                  smpControllerBtn.y = 0;
+                })
+                smpController.getDirection = function(){
+                  var direction = false,
+                      unreactedDist = 30;
+                  if(Math.abs(this.dx) < unreactedDist && Math.abs(this.dy) < unreactedDist ){
+                    return false;
+                  }
+                  
+                  if(Math.abs(this.dx) > Math.abs(this.dy)){
+                    if(this.dx > 0) direction = 'right';
+                    else direction = 'left';
+                  }
+                  else if(Math.abs(this.dx) < Math.abs(this.dy)){
+                    if(this.dy > 0) direction = 'down';
+                    else direction = 'up';
+                  }
+                  
+                  return direction;
+                }
+                return smpController;
             }
         });
         
