@@ -23,10 +23,17 @@
             BLOCK_WIDTH = 40,
             BLOCK_HEIGHT = 40,
             BLOCKS_NUMBER = 2,
+            GROUP_BLOCKS_MIN_NUMBER = 4,
             GAME_FLAMES = 20,
             DIRECTION_LONG_TIME = 10,
             GAME_GRID_WIDTH = 12,
-            GAME_GRID_HEIGHT = 12;
+            GAME_GRID_HEIGHT = 6,
+            BLOCK_TYPES = [
+                {id: 0, name: 'plane',       color: '#fff'},
+                {id: 1, name: 'strawberry',  color: '#f66'},
+                {id: 2, name: 'bean',        color: '#755'},
+                {id: 3, name: 'yomogi',      color: '#575'}
+            ];
 
 
 
@@ -74,6 +81,10 @@
                 // 親の初期化
                 this.superInit();
 
+                //子classの初期化
+                this.BlockGroup = this.createBlockGroupClass();
+                this.Block = this.createBlockClass();
+
                 //Gridの準備
                 this.gameGrid = this.createGrid();
                 this.ctrlBlocksGrid = this.createGrid();
@@ -105,7 +116,7 @@
 
                 if(this.controlled){
 
-                    if( this.app.timer.frame%GAME_FLAMES === 0 && this.controlled) {
+                    if( this.app.timer.frame%GAME_FLAMES === 0) {
                         var moved = this.ctrlBlocksGrid.moveBlocks('down', this.gameGrid);
                         if(!moved){
                             this.controlled = false;
@@ -124,14 +135,16 @@
                         this.ctrlBlocksGrid.rotateBlocks('left', this.gameGrid);
                     }
 
-                } else {
-
+                } else if(this.app.timer.frame%2 === 0){
                     var droppedAll = this.gameGrid.dropBlocks();
-                    if(!droppedAll) return false;
+                    if(!droppedAll) return;
+
+                    var noDelete = this.gameGrid.groupBlocks();
+                    if(!noDelete) return;
 
                     var inited = this.ctrlBlocksGrid.initBlocks(this, this.gameGrid);
                     this.controlled = true;
-                    if(inited) return false;
+                    if(inited) return;
 
                     this.sleep();
                 }
@@ -164,28 +177,49 @@
                 return direction;
             },
 
-            createControlBlocks: function() {
+            createBlockClass: function() {
+                return tm.define("tm.display.Block", {
+                    superClass: tm.display.Shape,
+                    init: function(typeId) {
+                        var typeId = (typeof typeId !== 'undefined')?typeId :
+                                tm.util.Random.randint(0, (BLOCK_TYPES.length - 1)),
+                            type = BLOCK_TYPES[typeId],
+                            param = {
+                                fillStyle: type.color,
+                                cornerRadius: 8,
+                                width: BLOCK_WIDTH,
+                                height: BLOCK_HEIGHT
+                            };
 
+                        this.superInit(param);
+                        this.render();
+
+                        this.setInteractive(true);
+                        this.setOrigin(0, 0);
+                        this.type = type;
+                    },
+                    _render: function() {
+                        var c = this.canvas;
+                        var lw = this.lineWidth;
+                        var lw_half = lw/2;
+
+                        c.fillRoundRect(lw_half, lw_half, this.width-lw, this.height-lw, this.cornerRadius);
+                        c.strokeRoundRect(lw_half, lw_half, this.width-lw, this.height-lw, this.cornerRadius);
+                    },
+                    animateRemove : function(){
+                        var self = this;
+                        self.tweener.to({
+                            alpha:0,
+                            scaleX: 1.6,
+                            scaleY: 1.6,
+                            originX: 0.3,
+                            originY: 0.3
+                        }, 200)
+                        .call(function () { self.remove(); });
+                        this.tweener.play();
+                    }
+                });
             },
-
-            createBlock: function(typeId) {
-                var typeId = (typeof typeId !== 'undefined')? typeId : tm.util.Random.randint(0, (this._blockTypes.length - 1)),
-                    type = this._blockTypes[typeId],
-                    block = tm.app.RoundRectangleShape(40, 40);
-
-                block.setFillStyle(type.color);
-                block.setInteractive(true);
-                block.setOrigin(0, 0);
-                block.type = type;
-                return block;
-            },
-
-            _blockTypes: [
-                {id: 0, name: 'plane',       color: '#fff'},
-                {id: 1, name: 'strawberry',  color: '#f66'},
-                {id: 2, name: 'bean',        color: '#755'},
-                {id: 3, name: 'yomogi',      color: '#575'}
-            ],
 
             createGrid: function() {
                 var grid = [], _scene = this;
@@ -223,7 +257,7 @@
                     grid.clear();
                     for(var i = 0; i < BLOCKS_NUMBER; i++){
                         if(comparedGrid && comparedGrid[i][center] !== false) return false;
-                        var block = _scene.createBlock();
+                        var block = new _scene.Block();
                         grid[i][center] = block;
                         obj.addChild(block);
                         block.gridPos = [i, center];
@@ -246,7 +280,6 @@
                                     grid[aftI][j] = block;
                                     grid[i][j] = false;
                                     block.gridPos = [aftI, j];
-                                    block.dropped = true;
                                     block.setPosition(j*BLOCK_WIDTH, aftI*BLOCK_HEIGHT);
                                     doppedAll = false;
                                 }
@@ -256,40 +289,70 @@
                     return doppedAll;
                 }
                 grid.groupBlocks = function(){
-
+                    _scene.BlockGroups = [];
+                    var noDelete = true;
                     for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
                         for(var j = 0; j < GAME_GRID_WIDTH; j++) {
-                            if(grid[i][j]&&grid[i][j].dropped) {
-                                var block = grid[i][j];
-                                block.group = block.group || [block];
-
-                                if( grid[i-1] || grid[i-1][j] ){
-                                    checkGroup(grid[i-1][j])
-                                }
-                                if( grid[i+1] || grid[i+1][j] ){
-                                    checkGroup(grid[i-1][j])
-                                }
-                                if( grid[i] || grid[i][j-i] ){
-                                    checkGroup(grid[i+1][j])
-                                }
-                                if( grid[i] || grid[i][j+i] ){
-                                    checkGroup(grid[i][j+i])
-                                }
-
-                                function checkGroup(otrBlock) {
-                                    if(block.type !== otrBlock.type ) return false;
-                                    if(otrBlock.group){
-                                        if(otrBlock.group.length > block.group.length) {
-
-                                        }
-                                    };
-
-                                }
-                                block.dropped = false;
+                            var block = grid[i][j];
+                            if(block) {
+                                if(block.group) block.group.removeBlock(block);
+                                block.group = new _scene.BlockGroup(block);
                             }
                         }
                     }
-                    return grid;
+
+                    for(var i = 0; i < GAME_GRID_HEIGHT; i++) {
+                        for(var j = 0; j < GAME_GRID_WIDTH; j++) {
+                            if(grid[i][j]) {
+                                var block = grid[i][j];
+
+
+                                if( grid[i-1] && grid[i-1][j] ){
+                                    checkGroup(grid[i-1][j],'top')
+                                }
+                                if( grid[i] && grid[i][j+1] ){
+                                    checkGroup(grid[i][j+1],'right')
+                                }
+                                if( grid[i+1] && grid[i+1][j] ){
+                                    checkGroup(grid[i+1][j],'bottom')
+                                }
+                                if( grid[i] && grid[i][j-1] ){
+                                    checkGroup(grid[i][j-1],'left')
+                                }
+
+                                function checkGroup(otrBlock,msg) {
+                                    if(block.type !== otrBlock.type) return;
+
+                                    if(block.group !== otrBlock.group){
+                                        otrBlock.group.concatGroup(block.group);
+                                        var groupOrder = block.group.orderIn(_scene.BlockGroups);
+                                        if(groupOrder > -1){
+                                            _scene.BlockGroups.splice(groupOrder, 1);
+                                        }
+                                        for(var i = 0, oldGroup = block.group; i < oldGroup.length; i++ ){
+                                            oldGroup[i].group = otrBlock.group;
+                                        }
+
+                                    }
+
+                                }
+
+                                if(!block.group.isIncluded(_scene.BlockGroups)){
+                                    _scene.BlockGroups.push(block.group);
+                                }
+                            }
+                        }
+                    }
+                    _scene.BlockGroups.forEach(function(group){
+                        if(group.length < GROUP_BLOCKS_MIN_NUMBER) return;
+                        for(var i = 0,length = group.length; i < length; i++){
+                            var block = group[i];
+                            block.animateRemove();
+                            grid[block.gridPos[0]][block.gridPos[1]] = false;
+                        }
+                        noDelete = false
+                    })
+                    return noDelete;
                 }
                 grid.rotateBlocks = function(rotateDirection, comparedGrid){
                     var rotateDirection = rotateDirection, rotateVal = 0,
@@ -380,6 +443,47 @@
                 }
 
                 return grid.init();
+            },
+
+            createBlockGroupClass: function(){
+                var BlockGroup = function(block){
+                    this.push(block);
+                    return this;
+                }
+                BlockGroup.prototype = new Array();
+                BlockGroup.prototype.removeBlock = function(block){
+                    for(var i = 0, length = this.length; i < length; i++) {
+                        if(this[i] === block) {
+                            this.splice(i, 1);
+                            break;
+                        }
+                    }
+                }
+                BlockGroup.prototype.concatGroup = function(group){
+                    for(var i = 0, length = group.length; i < length; i++) {
+                        this.push(group[i]);
+                    }
+                    return this;
+                }
+                BlockGroup.prototype.isIncluded = function(array){
+                    for(var i = 0, length = array.length; i < length; i++) {
+                        if(array[i] === this) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                BlockGroup.prototype.orderIn = function(array){
+                    for(var i = 0, length = array.length; i < length; i++) {
+                        if(array[i] === this) {
+                            return i;
+                        }
+                    }
+                    return -1;
+                }
+
+                return BlockGroup;
+
             },
 
             createSmpController: function() {
