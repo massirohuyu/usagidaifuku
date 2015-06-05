@@ -9,10 +9,11 @@
   <body>
 
     <canvas id="world"></canvas>
+    <img id="test" src="./images/brown1.svg">
 
     <script type="text/javascript">
       //確認用
-      var test_app;
+      var test_app = tm;
 
       (function(){
 
@@ -27,7 +28,13 @@
             GAME_FLAMES = 20,
             DIRECTION_LONG_TIME = 10,
             GAME_GRID_WIDTH = 12,
-            GAME_GRID_HEIGHT = 6,
+            GAME_GRID_HEIGHT = 12,
+            ASSETS = {
+                'plane': './images/brown1.svg',
+                'strawberry': './images/pink1.svg',
+                'bean': './images/gray1.svg',
+                'yomogi': './images/green1.svg'
+            }
             BLOCK_TYPES = [
                 {id: 0, name: 'plane',       color: '#fff'},
                 {id: 1, name: 'strawberry',  color: '#f66'},
@@ -46,11 +53,52 @@
             app.resize(SCREEN_WIDTH, SCREEN_HEIGHT); // リサイズ
             app.fitWindow();    // 自動フィット
 
-            // シーンを切り替える
-            app.replaceScene(MainScene());
+            var loading = tm.ui.LoadingScene({
+                assets: ASSETS,
+                width: SCREEN_WIDTH,
+                height: SCREEN_HEIGHT
+            });
+
+            //svgに対応
+            tm.asset.Loader._funcs['svg'] = tm.asset.Loader._funcs['gif']
+
+            // 読み込み完了後に呼ばれるメソッドを登録
+            loading.onload = function() {
+                // シーンを切り替える
+                // app.replaceScene(TestScene());
+                app.replaceScene(MainScene());
+            };
+            //ASSETを読み込む
+            app.replaceScene(loading);
+
 
             // 実行
             app.run();
+        });
+        tm.define("TestScene", {
+            superClass: "tm.app.Scene",
+
+            init: function(){
+                // 親の初期化
+                this.superInit();
+
+                // var img = tm.asset.Texture("images/brown1.svg");
+                // img.src = "images/brown1.svg";
+                // var img = tm.dom.Element('#test');
+                var a = tm.display.Sprite('yomogi', 84, 69).addChildTo(this);
+                a.setPosition(SCREEN_CENTER_X ,SCREEN_CENTER_Y );
+                // var that = this;
+                // img.onload = function() {
+                //     // img_bit = tm.graphics.Bitmap(img);
+                //     console.log(img)
+                //     a = new tm.display.Sprite(img, 84, 69).addChildTo(that);
+                //     console.log(a)
+                //     // a = tm.display.Sprite(img, 84, 69).addChildTo(this);
+                //     a.setPosition(SCREEN_CENTER_X ,SCREEN_CENTER_Y );
+                // };
+                // tm.display.Sprite('yomogi').addChildTo(this);
+
+            }
         });
 
         tm.define("MainScene", {
@@ -83,7 +131,7 @@
 
                 //子classの初期化
                 this.BlockGroup = this.createBlockGroupClass();
-                this.Block = this.createBlockClass();
+                this.Block = this.createBlockWithImgClass();
 
                 //Gridの準備
                 this.gameGrid = this.createGrid();
@@ -147,6 +195,8 @@
                     if(inited) return;
 
                     this.sleep();
+                    this.gameOver = tm.app.Label('Game Over').addChildTo(this);
+                    this.gameOver.setPosition(SCREEN_CENTER_X ,SCREEN_CENTER_Y );
                 }
 
             },
@@ -175,6 +225,38 @@
                 }
 
                 return direction;
+            },
+
+            createBlockWithImgClass: function() {
+                return tm.define("tm.display.Block", {
+                    superClass: tm.display.Sprite,
+                    init: function(typeId) {
+                        var typeId = (typeof typeId !== 'undefined')?typeId :
+                                tm.util.Random.randint(0, (BLOCK_TYPES.length - 1)),
+                            type = BLOCK_TYPES[typeId];
+
+                        this.superInit(type.name, BLOCK_WIDTH, BLOCK_HEIGHT);
+                        this.setHeight((BLOCK_WIDTH/this._image.width) * this._image.height);
+                        this.setInteractive(true);
+                        this.setOrigin(0, 0);
+                        this.type = type;
+                    },
+                    _render: function() {
+
+                    },
+                    animateRemove : function(){
+                        var self = this;
+                        self.tweener.to({
+                            alpha:0,
+                            scaleX: 1.6,
+                            scaleY: 0,
+                            originX: 0.3,
+                            originY: -1
+                        }, 200)
+                        .call(function () { self.remove(); });
+                        this.tweener.play();
+                    }
+                });
             },
 
             createBlockClass: function() {
